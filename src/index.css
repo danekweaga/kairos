@@ -126,5 +126,10 @@
     }
   html {
     @apply font-sans;
+    scrollbar-gutter: stable;
+    }
+  body {
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
     }
 }
