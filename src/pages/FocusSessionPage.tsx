@@ -3,7 +3,13 @@ import { Navigate, useLocation, useNavigate } from "react-router-dom"
 
 import { CustomizationMenu } from "@/components/CustomizationMenu"
 import { FocusSessionScreen } from "@/components/FocusSessionScreen"
-import type { FeelingQuick, MediaSelection, Task, TimerDisplayMode } from "@/lib/kairos-types"
+import type {
+  FeelingQuick,
+  FocusViewMode,
+  MediaSelection,
+  Task,
+  TimerDisplayMode,
+} from "@/lib/kairos-types"
 import { extendSessionByQuarter, getCheckpointStage, getPauseAllowance } from "@/lib/session-helpers"
 
 type FocusRouteState = {
@@ -26,6 +32,7 @@ export function FocusSessionPage() {
     state?.timerDisplayMode ?? "large"
   )
   const [darkMode, setDarkMode] = useState(Boolean(state?.darkMode))
+  const [focusViewMode, setFocusViewMode] = useState<FocusViewMode>("default")
 
   const baseSeconds = useMemo(
     () => (task ? Math.max(300, Math.round(task.estimatedHours * 3600)) : 0),
@@ -59,10 +66,6 @@ export function FocusSessionPage() {
     document.documentElement.classList.toggle("dark", darkMode)
   }, [darkMode])
 
-  if (!task) {
-    return <Navigate to="/dashboard" replace />
-  }
-
   function resetInterventionState() {
     setSelectedFeeling("")
     setCustomFeeling("")
@@ -70,12 +73,43 @@ export function FocusSessionPage() {
   }
 
   function goToDashboard() {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined)
+    }
     navigate("/dashboard", { replace: true })
   }
 
   function handleDoneEarly() {
     setIsRunning(false)
     setShowCelebration(true)
+  }
+
+  async function handleEnterFullscreenClock() {
+    setFocusViewMode("fullscreen")
+    if (document.fullscreenElement) return
+    try {
+      await document.documentElement.requestFullscreen()
+    } catch {
+      // Some browsers can reject fullscreen requests depending on user gesture context.
+    }
+  }
+
+  function handleEnterMiniClock() {
+    setFocusViewMode("mini")
+    if (document.fullscreenElement) {
+      void document.exitFullscreen().catch(() => undefined)
+    }
+  }
+
+  async function handleExitSpecialView() {
+    if (document.fullscreenElement) {
+      try {
+        await document.exitFullscreen()
+      } catch {
+        // Best effort only.
+      }
+    }
+    setFocusViewMode("default")
   }
 
   function handleStuck() {
@@ -123,6 +157,10 @@ export function FocusSessionPage() {
     }
   }
 
+  function handleCloseBreakPanel() {
+    handleResumeFromBreak()
+  }
+
   function handlePauseToggle() {
     if (pausedByUser) {
       setPausedByUser(false)
@@ -152,11 +190,33 @@ export function FocusSessionPage() {
       (threshold) => progressPercent >= threshold && !checkpointHistory.includes(threshold)
     )
     if (!nextCheckpoint) return
-    setCheckpointHistory((current) => [...current, nextCheckpoint])
-    setCurrentCheckpoint(nextCheckpoint)
-    setIsRunning(false)
-    setCheckInOpen(true)
+
+    const checkpointTimer = window.setTimeout(() => {
+      setCheckpointHistory((current) => [...current, nextCheckpoint])
+      setCurrentCheckpoint(nextCheckpoint)
+      setIsRunning(false)
+      setCheckInOpen(true)
+    }, 0)
+
+    return () => window.clearTimeout(checkpointTimer)
   }, [breakOpen, checkInOpen, checkpointHistory, progressPercent, showCelebration])
+
+  useEffect(() => {
+    function handleFullscreenChange() {
+      if (!document.fullscreenElement && focusViewMode === "fullscreen") {
+        setFocusViewMode("default")
+      }
+    }
+
+    document.addEventListener("fullscreenchange", handleFullscreenChange)
+    return () => {
+      document.removeEventListener("fullscreenchange", handleFullscreenChange)
+    }
+  }, [focusViewMode])
+
+  if (!task) {
+    return <Navigate to="/dashboard" replace />
+  }
 
   return (
     <div className="relative">
@@ -174,6 +234,7 @@ export function FocusSessionPage() {
         remainingSeconds={remainingSeconds}
         progressPercent={progressPercent}
         timerDisplayMode={timerDisplayMode}
+        viewMode={focusViewMode}
         pauseAllowed={pauseAllowed}
         pauseUsed={pauseUsed}
         pausedByUser={pausedByUser}
@@ -190,6 +251,7 @@ export function FocusSessionPage() {
         onFeelingChange={setSelectedFeeling}
         onCustomFeelingChange={setCustomFeeling}
         onExpectsToFinishChange={setExpectsToFinishOnTime}
+        onCloseBreakPanel={handleCloseBreakPanel}
         onResumeFromBreak={handleResumeFromBreak}
         onSwitchTask={goToDashboard}
         onEndSession={goToDashboard}
@@ -197,6 +259,9 @@ export function FocusSessionPage() {
         onDoneEarly={handleDoneEarly}
         onPauseToggle={handlePauseToggle}
         onMediaChange={setMediaSelection}
+        onEnterFullscreenClock={handleEnterFullscreenClock}
+        onEnterMiniClock={handleEnterMiniClock}
+        onExitSpecialView={handleExitSpecialView}
       />
     </div>
   )

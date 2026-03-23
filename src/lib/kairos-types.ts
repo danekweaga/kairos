@@ -27,6 +27,7 @@ export type MediaSelection = {
 }
 
 export type TimerDisplayMode = "large" | "compact"
+export type FocusViewMode = "default" | "fullscreen" | "mini"
 
 export type Profile = {
   id: string

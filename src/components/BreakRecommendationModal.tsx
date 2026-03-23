@@ -15,6 +15,7 @@ import { classifyFeeling, getBreakRecommendation } from "@/lib/session-helpers"
 
 type BreakRecommendationModalProps = {
   open: boolean
+  onClose: () => void
   stage: number
   totalMinutes: number
   selectedFeeling: FeelingQuick | ""
@@ -30,6 +31,7 @@ type BreakRecommendationModalProps = {
 
 export function BreakRecommendationModal({
   open,
+  onClose,
   stage,
   totalMinutes,
   selectedFeeling,
@@ -52,10 +54,10 @@ export function BreakRecommendationModal({
   }, [customFeeling, selectedFeeling, stage, totalMinutes])
 
   return (
-    <Dialog open={open}>
-      <DialogContent showCloseButton={false} className="max-h-[90vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={(nextOpen) => (!nextOpen ? onClose() : undefined)}>
+      <DialogContent className="max-h-[90vh] overflow-y-auto p-5 sm:max-w-xl sm:p-6">
         <DialogHeader>
-          <DialogTitle>Break Recommendation</DialogTitle>
+          <DialogTitle className="text-lg">Break Recommendation</DialogTitle>
           <DialogDescription>
             Let’s quickly adjust so this study block becomes productive again.
           </DialogDescription>
@@ -68,13 +70,13 @@ export function BreakRecommendationModal({
           onCustomFeelingChange={onCustomFeelingChange}
         />
 
-        <div className="rounded-lg border bg-muted/40 p-3 text-sm">
+        <div className="rounded-lg border bg-muted/40 p-4 text-sm leading-relaxed">
           <p className="font-medium">{recommendation.explanation}</p>
           <p className="text-muted-foreground">Take a {recommendation.minutes}-minute break.</p>
           <p className="text-muted-foreground">{recommendation.suggestion}</p>
         </div>
 
-        <div className="rounded-lg border p-3 text-sm">
+        <div className="rounded-lg border p-4 text-sm">
           <p className="mb-2 font-medium">Do you think you will finish in your estimated time?</p>
           <div className="flex gap-2">
             <Button
@@ -99,7 +101,7 @@ export function BreakRecommendationModal({
           ) : null}
         </div>
 
-        <DialogFooter className="gap-2 sm:justify-between">
+        <DialogFooter className="sticky bottom-0 gap-2 border-t bg-background/95 backdrop-blur-sm sm:justify-between">
           <Button type="button" variant="outline" onClick={onSwitchTask}>
             Switch Task
           </Button>
