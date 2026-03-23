@@ -7,6 +7,7 @@ import { PublicOnlyRoute } from "@/routes/PublicOnlyRoute"
 import { DashboardPage } from "@/pages/DashboardPage"
 import { FocusSessionPage } from "@/pages/FocusSessionPage"
 import { HomePage } from "@/pages/HomePage"
+import { HowToUsePage } from "@/pages/HowToUsePage"
 import { LandingPage } from "@/pages/LandingPage"
 import { LoginPage } from "@/pages/LoginPage"
 import { OnboardingPage } from "@/pages/OnboardingPage"
@@ -29,6 +30,7 @@ function App() {
 
           <Route element={<OnboardingGate />}>
             <Route path="/home" element={<HomePage />} />
+            <Route path="/how-to-use" element={<HowToUsePage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/focus" element={<FocusSessionPage />} />
           </Route>

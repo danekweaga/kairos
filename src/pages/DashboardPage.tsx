@@ -80,6 +80,9 @@ export function DashboardPage() {
           <Button type="button" variant="outline" onClick={() => navigate("/home")}>
             Back to Home
           </Button>
+          <Button type="button" variant="outline" onClick={() => navigate("/how-to-use")}>
+            How to Use
+          </Button>
           <Button
             type="button"
             variant="ghost"
