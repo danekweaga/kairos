@@ -12,20 +12,44 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useAuth } from "@/context/AuthContext"
 import type { EnergyLevel, MediaSelection, Task, TimerDisplayMode } from "@/lib/kairos-types"
 import { calculateRoi, getRecommendedTask } from "@/lib/session-helpers"
+import {
+  readJSON,
+  STORAGE_KEYS,
+  type PersistedActiveSession,
+  type PersistedDashboardState,
+  writeJSON,
+} from "@/lib/storage"
+
+const defaultMediaSelection: MediaSelection = {
+  source: "none",
+  url: "",
+  title: "",
+}
+
+const defaultDashboardState: PersistedDashboardState = {
+  tasks: [],
+  energyLevel: "medium",
+  darkMode: false,
+  timerDisplayMode: "large",
+  mediaSelection: defaultMediaSelection,
+}
 
 export function DashboardPage() {
   const navigate = useNavigate()
   const { signOut } = useAuth()
+  const [restoredDashboardState] = useState<PersistedDashboardState>(() =>
+    readJSON<PersistedDashboardState>(STORAGE_KEYS.dashboard, defaultDashboardState)
+  )
 
-  const [tasks, setTasks] = useState<Task[]>([])
-  const [energyLevel, setEnergyLevel] = useState<EnergyLevel>("medium")
-  const [darkMode, setDarkMode] = useState(false)
-  const [timerDisplayMode, setTimerDisplayMode] = useState<TimerDisplayMode>("large")
-  const [mediaSelection, setMediaSelection] = useState<MediaSelection>({
-    source: "none",
-    url: "",
-    title: "",
-  })
+  const [tasks, setTasks] = useState<Task[]>(restoredDashboardState.tasks)
+  const [energyLevel, setEnergyLevel] = useState<EnergyLevel>(restoredDashboardState.energyLevel)
+  const [darkMode, setDarkMode] = useState(restoredDashboardState.darkMode)
+  const [timerDisplayMode, setTimerDisplayMode] = useState<TimerDisplayMode>(
+    restoredDashboardState.timerDisplayMode
+  )
+  const [mediaSelection, setMediaSelection] = useState<MediaSelection>(
+    restoredDashboardState.mediaSelection
+  )
 
   const sortedTasks = useMemo(
     () => [...tasks].sort((a, b) => calculateRoi(b) - calculateRoi(a)),
@@ -43,6 +67,24 @@ export function DashboardPage() {
 
   function handleStartSession() {
     if (!recommendedTask) return
+
+    const totalSeconds = Math.max(300, Math.round(recommendedTask.estimatedHours * 3600))
+    const initialActiveSession: PersistedActiveSession = {
+      task: recommendedTask,
+      mediaSelection,
+      timerDisplayMode,
+      darkMode,
+      sessionTotalSeconds: totalSeconds,
+      remainingSeconds: totalSeconds,
+      isRunning: true,
+      currentCheckpoint: 25,
+      checkpointHistory: [],
+      breakCount: 0,
+      pauseUsed: 0,
+      pausedByUser: false,
+    }
+    writeJSON(STORAGE_KEYS.activeSession, initialActiveSession)
+
     navigate("/focus", {
       state: {
         task: recommendedTask,
@@ -57,8 +99,19 @@ export function DashboardPage() {
     "You get 1 pause per 30 minutes, minimum 1. Every 2 breaks adds 1 extra pause."
 
   useEffect(() => {
+    if (typeof document === "undefined") return
     document.documentElement.classList.toggle("dark", darkMode)
   }, [darkMode])
+
+  useEffect(() => {
+    writeJSON<PersistedDashboardState>(STORAGE_KEYS.dashboard, {
+      tasks,
+      energyLevel,
+      darkMode,
+      timerDisplayMode,
+      mediaSelection,
+    })
+  }, [darkMode, energyLevel, mediaSelection, tasks, timerDisplayMode])
 
   return (
     <main className="mx-auto flex min-h-svh w-full max-w-5xl flex-col gap-6 p-6">

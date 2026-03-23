@@ -27,36 +27,74 @@ export function getCheckpointStage(progressPercent: number): 25 | 50 | 75 | 100 
 
 export function classifyFeeling(quickFeeling: FeelingQuick | "", customFeeling: string): FeelingQuick | "custom" {
   if (quickFeeling) return quickFeeling
-  return customFeeling.trim().length > 0 ? "custom" : "tired"
+  const normalized = customFeeling.trim().toLowerCase()
+  if (!normalized) return "tired"
+
+  const tiredKeywords = ["tired", "sleepy", "fatigue", "exhausted", "drained", "low energy"]
+  const distractedKeywords = ["distracted", "scrolling", "procrastinating", "noisy", "can't focus", "wandering"]
+  const overwhelmedKeywords = ["overwhelmed", "anxious", "stressed", "too much", "panic", "pressure"]
+  const blockedKeywords = ["blocked", "stuck", "confused", "blank", "can't solve", "dead end"]
+
+  if (tiredKeywords.some((word) => normalized.includes(word))) return "tired"
+  if (distractedKeywords.some((word) => normalized.includes(word))) return "distracted"
+  if (overwhelmedKeywords.some((word) => normalized.includes(word))) return "overwhelmed"
+  if (blockedKeywords.some((word) => normalized.includes(word))) return "mentally blocked"
+
+  return "custom"
+}
+
+export type BreakRecommendation = {
+  minutes: number
+  breakType: string
+  detectedFeeling: FeelingQuick | "custom"
+  explanation: string
+  reason: string
+  suggestion: string
 }
 
 export function getBreakRecommendation(params: {
   feeling: FeelingQuick | "custom"
   stage: number
   totalMinutes: number
-}): { minutes: number; explanation: string; suggestion: string } {
+}): BreakRecommendation {
   const { feeling, stage, totalMinutes } = params
 
   let minutes = 5
+  let breakType = "Quick reset break"
   let explanation = "A short break can help reset your focus."
+  let reason = "Your check-in suggests a brief reset is enough to regain momentum."
   let suggestion = "Stand up, stretch your shoulders, and hydrate."
 
   if (feeling === "tired") {
-    minutes = 5
+    minutes = 9
+    breakType = "Recovery break"
     explanation = "You seem mentally fatigued."
-    suggestion = "Rest your eyes and take a few deep breaths."
+    reason = "Signs of low energy usually respond better to deeper rest than a fast restart."
+    suggestion = "Rest your eyes, hydrate, and breathe slowly before re-engaging."
   } else if (feeling === "distracted") {
-    minutes = 3
+    minutes = 4
+    breakType = "Attention reset break"
     explanation = "You seem distracted right now."
+    reason = "When attention is scattered, a short pattern interrupt often restores focus quickly."
     suggestion = "Take a brief walk and restart with one clear micro-goal."
   } else if (feeling === "overwhelmed") {
-    minutes = 8
+    minutes = 7
+    breakType = "Pressure-release break"
     explanation = "You seem overloaded."
-    suggestion = "Step away, breathe, and return with a smaller next step."
+    reason = "Cognitive overload improves when pressure is reduced and scope is narrowed."
+    suggestion = "Step away, breathe, then return with a smaller and easier first step."
   } else if (feeling === "mentally blocked") {
-    minutes = 10
+    minutes = 5
+    breakType = "Strategy-shift break"
     explanation = "You seem blocked on the current approach."
+    reason = "Getting unstuck often requires a different angle, not more force on the same method."
     suggestion = "Switch strategy or review an easier sub-problem first."
+  } else if (feeling === "custom") {
+    minutes = 5
+    breakType = "Custom reflection break"
+    explanation = "You shared a custom feeling, so this is a balanced reset."
+    reason = "Without a strong keyword match, Kairos chooses a moderate break to reset and reassess."
+    suggestion = "Take a short reset, then define one specific next action before resuming."
   }
 
   if (stage >= 75) minutes += 1
@@ -64,7 +102,10 @@ export function getBreakRecommendation(params: {
 
   return {
     minutes,
+    breakType,
+    detectedFeeling: feeling,
     explanation,
+    reason,
     suggestion,
   }
 }

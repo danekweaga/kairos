@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import type { FormEvent } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { Eye, EyeOff, Lock } from "lucide-react"
@@ -8,21 +8,63 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/context/AuthContext"
+import { supabase } from "@/lib/supabase"
 
 export function ResetPasswordPage() {
   const navigate = useNavigate()
-  const { loading, error, updatePassword } = useAuth()
+  const { loading, error, signOut, updatePassword } = useAuth()
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
+  const [checkingSession, setCheckingSession] = useState(true)
+  const [sessionReady, setSessionReady] = useState(false)
   const [showNewPassword, setShowNewPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function checkRecoverySession() {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession()
+
+        if (!isMounted) return
+        setSessionReady(Boolean(session?.user))
+        if (!session?.user) {
+          setSubmitError(
+            "Recovery link is missing or expired. Request a new reset email and verify your Supabase redirect URL points to /reset-password."
+          )
+        }
+      } catch {
+        if (!isMounted) return
+        setSessionReady(false)
+        setSubmitError("Could not verify your recovery session. Please request a new reset link.")
+      } finally {
+        if (isMounted) {
+          setCheckingSession(false)
+        }
+      }
+    }
+
+    checkRecoverySession()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     setSubmitError(null)
     setSuccessMessage(null)
+
+    if (!sessionReady) {
+      setSubmitError("No valid recovery session found. Request a new reset link.")
+      return
+    }
 
     if (newPassword.length < 6) {
       setSubmitError("Password must be at least 6 characters.")
@@ -37,6 +79,7 @@ export function ResetPasswordPage() {
     try {
       await updatePassword(newPassword)
       setSuccessMessage("Password updated successfully. You can now log in.")
+      await signOut()
       setTimeout(() => navigate("/login", { replace: true }), 1200)
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Failed to update password.")
@@ -103,11 +146,14 @@ export function ResetPasswordPage() {
 
         {(submitError || error) ? <p className="text-sm text-destructive">{submitError ?? error}</p> : null}
         {successMessage ? <p className="text-sm text-emerald-600">{successMessage}</p> : null}
+        {checkingSession ? (
+          <p className="text-sm text-muted-foreground">Verifying reset link...</p>
+        ) : null}
 
         <div className="space-y-6 pt-4">
           <Button
             type="submit"
-            disabled={loading}
+            disabled={loading || checkingSession || !sessionReady}
             className="h-14 w-full rounded-2xl bg-gradient-to-br from-[#4f4ccd] to-[#423fc0] text-[#faf6ff] shadow-lg shadow-[#4f4ccd]/20 transition-all duration-200 hover:shadow-[#4f4ccd]/30 active:scale-[0.98] [font-family:Manrope,Inter,sans-serif]"
           >
             {loading ? "Updating..." : "Update Password"}

@@ -44,6 +44,7 @@ export function BreakRecommendationModal({
   onSwitchTask,
   onEndSession,
 }: BreakRecommendationModalProps) {
+  const selectedOrDetectedFeeling = selectedFeeling || (customFeeling.trim() ? "custom" : "tired")
   const recommendation = useMemo(() => {
     const feeling = classifyFeeling(selectedFeeling, customFeeling)
     return getBreakRecommendation({
@@ -72,8 +73,18 @@ export function BreakRecommendationModal({
 
         <div className="rounded-lg border bg-muted/40 p-4 text-sm leading-relaxed">
           <p className="font-medium">{recommendation.explanation}</p>
-          <p className="text-muted-foreground">Take a {recommendation.minutes}-minute break.</p>
-          <p className="text-muted-foreground">{recommendation.suggestion}</p>
+          <p className="text-muted-foreground">
+            Kairos read this as:{" "}
+            <span className="font-medium text-foreground">
+              {recommendation.detectedFeeling === "custom"
+                ? selectedOrDetectedFeeling
+                : recommendation.detectedFeeling}
+            </span>
+          </p>
+          <p className="text-muted-foreground">Break type: {recommendation.breakType}</p>
+          <p className="text-muted-foreground">Recommended duration: {recommendation.minutes} minutes.</p>
+          <p className="text-muted-foreground">Why: {recommendation.reason}</p>
+          <p className="text-muted-foreground">Next step: {recommendation.suggestion}</p>
         </div>
 
         <div className="rounded-lg border p-4 text-sm">

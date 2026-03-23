@@ -2,6 +2,7 @@ import { BreakRecommendationModal } from "@/components/BreakRecommendationModal"
 import { CheckpointModal } from "@/components/CheckpointModal"
 import { MediaSelector } from "@/components/MediaSelector"
 import { ProgressBar } from "@/components/ProgressBar"
+import { SessionCompletionReward } from "@/components/SessionCompletionReward"
 import { SessionTimer } from "@/components/SessionTimer"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -30,6 +31,7 @@ type FocusSessionScreenProps = {
   expectsToFinishOnTime: boolean | null
   media: MediaSelection
   showCelebration: boolean
+  completedMinutes: number
   onCheckInYes: () => void
   onCheckInNo: () => void
   onFeelingChange: (value: FeelingQuick) => void
@@ -46,6 +48,7 @@ type FocusSessionScreenProps = {
   onEnterFullscreenClock: () => void
   onEnterMiniClock: () => void
   onExitSpecialView: () => void
+  onStartAnotherSession: () => void
 }
 
 export function FocusSessionScreen({
@@ -65,6 +68,7 @@ export function FocusSessionScreen({
   expectsToFinishOnTime,
   media,
   showCelebration,
+  completedMinutes,
   onCheckInYes,
   onCheckInNo,
   onFeelingChange,
@@ -81,6 +85,7 @@ export function FocusSessionScreen({
   onEnterFullscreenClock,
   onEnterMiniClock,
   onExitSpecialView,
+  onStartAnotherSession,
 }: FocusSessionScreenProps) {
   const remainingPauses = Math.max(0, pauseAllowed - pauseUsed)
   const timerMode = viewMode === "mini" ? "compact" : timerDisplayMode
@@ -108,6 +113,13 @@ export function FocusSessionScreen({
         onResume={onResumeFromBreak}
         onSwitchTask={onSwitchTask}
         onEndSession={onEndSession}
+      />
+
+      <SessionCompletionReward
+        open={showCelebration}
+        completedMinutes={completedMinutes}
+        onStartAnotherSession={onStartAnotherSession}
+        onReturnToDashboard={onSwitchTask}
       />
     </>
   )
@@ -232,23 +244,6 @@ export function FocusSessionScreen({
           </div>
         </CardContent>
       </Card>
-
-      {showCelebration ? (
-        <Card className="mx-auto w-full max-w-6xl">
-          <CardHeader>
-            <CardTitle>Great Work 🎉</CardTitle>
-            <CardDescription>You finished this task early. Momentum like this compounds.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="rounded-lg border bg-muted/30 p-4 text-sm text-muted-foreground">
-              Celebratory mode activated. Take a quick reset and choose the next high-impact move.
-            </div>
-            <Button type="button" onClick={onSwitchTask}>
-              Back to Dashboard
-            </Button>
-          </CardContent>
-        </Card>
-      ) : null}
 
       <div className="mx-auto w-full max-w-6xl">
         <MediaSelector media={media} onChange={onMediaChange} />

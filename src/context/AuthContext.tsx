@@ -72,7 +72,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(existingSession?.user ?? null)
 
         if (existingSession?.user) {
-          await loadProfile(existingSession.user.id)
+          try {
+            await loadProfile(existingSession.user.id)
+          } catch {
+            // Do not block auth flows (including password recovery) on profile errors.
+            setProfile(null)
+          }
         } else {
           setProfile(null)
         }
@@ -98,8 +103,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (nextSession?.user) {
         try {
           await loadProfile(nextSession.user.id)
-        } catch (err) {
-          setError(err instanceof Error ? err.message : "Failed to load profile.")
+        } catch {
+          // Keep auth session usable even when profile lookup fails.
+          setProfile(null)
         }
       } else {
         setProfile(null)
@@ -157,7 +163,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true)
     setError(null)
 
-    const redirectTo = `${window.location.origin}/reset-password`
+    const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:5173"
+    const redirectTo = `${origin}/reset-password`
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
     setLoading(false)
 
