@@ -80,7 +80,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let isMounted = true
 
     async function initAuth() {
-      const initStart = typeof performance !== "undefined" ? performance.now() : Date.now()
       setLoading(true)
       setInitError(null)
       setError(null)
@@ -94,27 +93,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(existingSession?.user ?? null)
 
         if (existingSession?.user) {
-          const profileStart = typeof performance !== "undefined" ? performance.now() : Date.now()
           try {
             await loadProfile(existingSession.user.id)
-            // #region agent log
-            fetch("http://127.0.0.1:7813/ingest/5b4830d4-73b3-470d-a8be-4731797e0582", {
-              method: "POST",
-              headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "f0655d" },
-              body: JSON.stringify({
-                sessionId: "f0655d",
-                runId: "reset-diagnose",
-                hypothesisId: "H5",
-                location: "AuthContext.tsx:initAuth",
-                message: "profile_load_result",
-                data: {
-                  hasExistingSessionUser: true,
-                  profileLoadMs: Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - profileStart),
-                },
-                timestamp: Date.now(),
-              }),
-            }).catch(() => {})
-            // #endregion
           } catch {
             // Do not block auth flows (including password recovery) on profile errors.
             setProfile(null)
@@ -127,23 +107,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setInitError(err instanceof Error ? err.message : "Failed to initialize auth.")
       } finally {
         if (isMounted) {
-          // #region agent log
-          fetch("http://127.0.0.1:7813/ingest/5b4830d4-73b3-470d-a8be-4731797e0582", {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "f0655d" },
-            body: JSON.stringify({
-              sessionId: "f0655d",
-              runId: "reset-diagnose",
-              hypothesisId: "H5",
-              location: "AuthContext.tsx:initAuth",
-              message: "init_auth_complete",
-              data: {
-                initAuthMs: Math.round((typeof performance !== "undefined" ? performance.now() : Date.now()) - initStart),
-              },
-              timestamp: Date.now(),
-            }),
-          }).catch(() => {})
-          // #endregion
           setLoading(false)
         }
       }
@@ -249,60 +212,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setError(null)
 
     const redirectTo = `${getAppOrigin()}/reset-password`
-    // #region agent log
-    fetch("http://127.0.0.1:7813/ingest/5b4830d4-73b3-470d-a8be-4731797e0582", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "f0655d" },
-      body: JSON.stringify({
-        sessionId: "f0655d",
-        runId: "preflight-reset",
-        hypothesisId: "H3",
-        location: "AuthContext.tsx:sendPasswordReset",
-        message: "password_reset_attempt",
-        data: { redirectTo },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {})
-    // #endregion
     logAuthEvent("password_reset_attempt", { redirectTo })
     const { error: resetError } = await supabase.auth.resetPasswordForEmail(normalizedEmail, { redirectTo })
     setLoading(false)
 
     if (resetError) {
-      // #region agent log
-      fetch("http://127.0.0.1:7813/ingest/5b4830d4-73b3-470d-a8be-4731797e0582", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "f0655d" },
-        body: JSON.stringify({
-          sessionId: "f0655d",
-          runId: "preflight-reset",
-          hypothesisId: "H3",
-          location: "AuthContext.tsx:sendPasswordReset",
-          message: "password_reset_result",
-          data: { hasError: true },
-          timestamp: Date.now(),
-        }),
-      }).catch(() => {})
-      // #endregion
       logAuthEvent("password_reset_failure", { reason: "supabase_error" })
       setError(resetError.message)
       throw resetError
     }
-    // #region agent log
-    fetch("http://127.0.0.1:7813/ingest/5b4830d4-73b3-470d-a8be-4731797e0582", {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "f0655d" },
-      body: JSON.stringify({
-        sessionId: "f0655d",
-        runId: "preflight-reset",
-        hypothesisId: "H3",
-        location: "AuthContext.tsx:sendPasswordReset",
-        message: "password_reset_result",
-        data: { hasError: false },
-        timestamp: Date.now(),
-      }),
-    }).catch(() => {})
-    // #endregion
     logAuthEvent("password_reset_email_sent")
   }, [])
 
