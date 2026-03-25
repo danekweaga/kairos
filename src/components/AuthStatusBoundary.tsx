@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { useAuth } from "@/context/AuthContext"
 
 export function AuthStatusBoundary({ children }: { children: ReactNode }) {
-  const { loading, error } = useAuth()
+  const { loading, initError } = useAuth()
 
   if (loading) {
     return (
@@ -19,13 +19,13 @@ export function AuthStatusBoundary({ children }: { children: ReactNode }) {
     )
   }
 
-  if (error) {
+  if (initError) {
     return (
       <main className="mx-auto flex min-h-svh w-full max-w-2xl items-center p-6">
         <Card className="w-full">
           <CardHeader>
             <CardTitle>Auth Error</CardTitle>
-            <CardDescription>{error}</CardDescription>
+            <CardDescription>{initError}</CardDescription>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
             Refresh the page or try signing in again.

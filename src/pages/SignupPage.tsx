@@ -8,6 +8,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/context/AuthContext"
+import { checkRateLimit } from "@/lib/rate-limit"
+import { isValidEmail, normalizeEmail, validatePasswordStrength } from "@/lib/validation"
+
+const SIGNUP_COOLDOWN_MS = 7000
 
 export function SignupPage() {
   const navigate = useNavigate()
@@ -21,8 +25,26 @@ export function SignupPage() {
     event.preventDefault()
     setSubmitError(null)
 
+    const normalizedEmail = normalizeEmail(email)
+    if (!isValidEmail(normalizedEmail)) {
+      setSubmitError("Please enter a valid email address.")
+      return
+    }
+
+    const passwordError = validatePasswordStrength(password)
+    if (passwordError) {
+      setSubmitError(passwordError)
+      return
+    }
+
+    const signupLimit = checkRateLimit("signup", SIGNUP_COOLDOWN_MS)
+    if (!signupLimit.allowed) {
+      setSubmitError(`Please wait ${Math.ceil(signupLimit.retryAfterMs / 1000)}s before trying again.`)
+      return
+    }
+
     try {
-      await signUp(email, password)
+      await signUp(normalizedEmail, password)
       navigate("/onboarding", { replace: true })
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Unable to create account.")
@@ -62,7 +84,7 @@ export function SignupPage() {
             <Input
               id="password"
               type={showPassword ? "text" : "password"}
-              minLength={6}
+              minLength={8}
               required
               value={password}
               onChange={(event) => setPassword(event.target.value)}

@@ -12,12 +12,14 @@ import type { Session, User } from "@supabase/supabase-js"
 import type { OnboardingFormValues, Profile } from "@/lib/kairos-types"
 import { createProfile, getProfile, updateProfile } from "@/lib/profile"
 import { supabase } from "@/lib/supabase"
+import { clampNumber, isValidEmail, normalizeEmail, sanitizeText } from "@/lib/validation"
 
 type AuthContextValue = {
   session: Session | null
   user: User | null
   profile: Profile | null
   loading: boolean
+  initError: string | null
   error: string | null
   signIn: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string) => Promise<void>
@@ -29,12 +31,30 @@ type AuthContextValue = {
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
+const DEFAULT_APP_ORIGIN = "http://localhost:5173"
+
+function getAppOrigin(): string {
+  const configuredOrigin = import.meta.env.VITE_APP_ORIGIN as string | undefined
+  if (configuredOrigin && configuredOrigin.trim()) {
+    return configuredOrigin.replace(/\/+$/, "")
+  }
+  if (typeof window !== "undefined") {
+    return window.location.origin
+  }
+  return DEFAULT_APP_ORIGIN
+}
+
+function logAuthEvent(event: string, metadata?: Record<string, string | number | boolean>) {
+  // Non-sensitive auth telemetry for debugging and security checks.
+  console.info(`[auth] ${event}`, metadata ?? {})
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
+  const [initError, setInitError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const loadProfile = useCallback(async (userId: string) => {
@@ -61,6 +81,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function initAuth() {
       setLoading(true)
+      setInitError(null)
       setError(null)
       try {
         const {
@@ -83,7 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       } catch (err) {
         if (!isMounted) return
-        setError(err instanceof Error ? err.message : "Failed to initialize auth.")
+        setInitError(err instanceof Error ? err.message : "Failed to initialize auth.")
       } finally {
         if (isMounted) {
           setLoading(false)
@@ -98,7 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
       setSession(nextSession)
       setUser(nextSession?.user ?? null)
-      setError(null)
+      setInitError(null)
 
       if (nextSession?.user) {
         try {
@@ -120,22 +141,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [loadProfile])
 
   const signIn = useCallback(async (email: string, password: string) => {
+    const normalizedEmail = normalizeEmail(email)
+    if (!isValidEmail(normalizedEmail)) {
+      throw new Error("Please enter a valid email address.")
+    }
+
     setLoading(true)
     setError(null)
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password })
+    logAuthEvent("login_attempt", { emailDomain: normalizedEmail.split("@")[1] ?? "unknown" })
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: normalizedEmail,
+      password,
+    })
     setLoading(false)
     if (signInError) {
+      logAuthEvent("login_failure", { reason: "supabase_error" })
       setError(signInError.message)
       throw signInError
     }
+    logAuthEvent("login_success")
   }, [])
 
   const signUp = useCallback(async (email: string, password: string) => {
+    const normalizedEmail = normalizeEmail(email)
+    if (!isValidEmail(normalizedEmail)) {
+      throw new Error("Please enter a valid email address.")
+    }
+
     setLoading(true)
     setError(null)
-    const { data, error: signUpError } = await supabase.auth.signUp({ email, password })
+    logAuthEvent("signup_attempt", { emailDomain: normalizedEmail.split("@")[1] ?? "unknown" })
+    const { data, error: signUpError } = await supabase.auth.signUp({
+      email: normalizedEmail,
+      password,
+    })
 
     if (signUpError) {
+      logAuthEvent("signup_failure", { reason: "supabase_error" })
       setLoading(false)
       setError(signUpError.message)
       throw signUpError
@@ -146,6 +188,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     setLoading(false)
+    logAuthEvent("signup_success")
   }, [loadProfile])
 
   const signOut = useCallback(async () => {
@@ -160,18 +203,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const sendPasswordReset = useCallback(async (email: string) => {
+    const normalizedEmail = normalizeEmail(email)
+    if (!isValidEmail(normalizedEmail)) {
+      throw new Error("Please enter a valid email address.")
+    }
+
     setLoading(true)
     setError(null)
 
-    const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:5173"
-    const redirectTo = `${origin}/reset-password`
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, { redirectTo })
+    const redirectTo = `${getAppOrigin()}/reset-password`
+    logAuthEvent("password_reset_attempt", { redirectTo })
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(normalizedEmail, { redirectTo })
     setLoading(false)
 
     if (resetError) {
+      logAuthEvent("password_reset_failure", { reason: "supabase_error" })
       setError(resetError.message)
       throw resetError
     }
+    logAuthEvent("password_reset_email_sent")
   }, [])
 
   const updatePassword = useCallback(async (newPassword: string) => {
@@ -182,9 +232,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(false)
 
     if (updateError) {
+      logAuthEvent("password_update_failure", { reason: "supabase_error" })
       setError(updateError.message)
       throw updateError
     }
+    logAuthEvent("password_update_success")
   }, [])
 
   const saveOnboarding = useCallback(async (values: OnboardingFormValues) => {
@@ -193,8 +245,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setLoading(true)
     setError(null)
     try {
+      const sanitizedValues: Partial<OnboardingFormValues> = {
+        role: sanitizeText(values.role ?? "", 60),
+        preferred_language: sanitizeText(values.preferred_language ?? "", 40),
+        main_goal: sanitizeText(values.main_goal ?? "", 500),
+        preferred_session_length: clampNumber(Number(values.preferred_session_length), 15, 240, 25),
+        audio_preference: sanitizeText(values.audio_preference ?? "", 60),
+        guidance_style: sanitizeText(values.guidance_style ?? "", 40),
+      }
       const updated = await updateProfile(user.id, {
-        ...values,
+        ...sanitizedValues,
         onboarding_completed: true,
       })
       setProfile(updated)
@@ -212,6 +272,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       profile,
       loading,
+      initError,
       error,
       signIn,
       signUp,
@@ -223,6 +284,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }),
     [
       error,
+      initError,
       loading,
       profile,
       refreshProfile,

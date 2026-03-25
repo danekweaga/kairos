@@ -29,14 +29,16 @@ Kairos is a focus-planning web app that helps you pick the right task for your c
 
 ## Environment variables
 
-Create a `.env` file in the project root:
+Copy `.env.example` to `.env` in the project root:
 
 ```bash
 VITE_SUPABASE_URL=your_supabase_project_url
 VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_APP_ORIGIN=http://localhost:5173
 ```
 
 Kairos requires both variables at startup. If either is missing, the app throws an error from `src/lib/supabase.ts`.
+Use `VITE_APP_ORIGIN` to control password reset redirect origin in multi-environment setups.
 
 ## Install and run
 
@@ -99,6 +101,63 @@ Kairos expects a `profiles` table keyed by auth user id (`id`) and reads/writes 
 - `audio_preference`
 - `guidance_style`
 - `onboarding_completed`
+
+### Password reset configuration
+
+In Supabase dashboard (`Authentication -> URL Configuration`), add all redirect URLs used by Kairos:
+
+- `http://localhost:5173/reset-password`
+- `https://<your-production-domain>/reset-password`
+- Optional preview URLs if you test Vercel previews
+
+If redirect URLs are missing, reset links can fail or land without a usable recovery session.
+
+### Security baseline (frontend + Supabase)
+
+- Frontend must only use `VITE_SUPABASE_ANON_KEY` (never service role key).
+- Keep `.env` out of Git (`.gitignore` is configured for this).
+- Use RLS on all user-owned tables, scoped to `auth.uid()`.
+- Enable email confirmation and review password policy in Supabase Auth settings.
+
+### Example RLS policies for `profiles`
+
+Run in Supabase SQL editor (adjust if you already have policies):
+
+```sql
+alter table public.profiles enable row level security;
+
+create policy "profiles_select_own"
+on public.profiles
+for select
+using (auth.uid() = id);
+
+create policy "profiles_insert_own"
+on public.profiles
+for insert
+with check (auth.uid() = id);
+
+create policy "profiles_update_own"
+on public.profiles
+for update
+using (auth.uid() = id)
+with check (auth.uid() = id);
+```
+
+### IDOR/RLS verification checklist
+
+- Sign in as User A and verify User A can read/update only User A profile.
+- Sign in as User B and verify User B cannot read/update User A profile.
+- Confirm all new tables added later receive equivalent `auth.uid()`-scoped policies.
+
+### Vercel deployment security checklist
+
+- Set env vars in Vercel for each environment (Production/Preview/Development):
+  - `VITE_SUPABASE_URL`
+  - `VITE_SUPABASE_ANON_KEY`
+  - `VITE_APP_ORIGIN`
+- Ensure production domain is HTTPS and matches Supabase redirect configuration.
+- Avoid logging secrets/tokens in client code or browser console.
+- Use Supabase built-in controls for abuse protection (Auth rate limits / captcha where appropriate).
 
 ## Troubleshooting
 

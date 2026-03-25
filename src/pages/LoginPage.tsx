@@ -8,6 +8,11 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/context/AuthContext"
+import { checkRateLimit } from "@/lib/rate-limit"
+import { isValidEmail, normalizeEmail } from "@/lib/validation"
+
+const LOGIN_COOLDOWN_MS = 4000
+const RESET_COOLDOWN_MS = 15000
 
 export function LoginPage() {
   const navigate = useNavigate()
@@ -24,8 +29,20 @@ export function LoginPage() {
     event.preventDefault()
     setSubmitError(null)
 
+    const normalizedEmail = normalizeEmail(email)
+    if (!isValidEmail(normalizedEmail)) {
+      setSubmitError("Please enter a valid email address.")
+      return
+    }
+
+    const loginLimit = checkRateLimit("login", LOGIN_COOLDOWN_MS)
+    if (!loginLimit.allowed) {
+      setSubmitError(`Please wait ${Math.ceil(loginLimit.retryAfterMs / 1000)}s before trying again.`)
+      return
+    }
+
     try {
-      await signIn(email, password)
+      await signIn(normalizedEmail, password)
       navigate("/home", { replace: true })
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Unable to log in.")
@@ -35,8 +52,21 @@ export function LoginPage() {
   async function handlePasswordReset() {
     setSubmitError(null)
     setResetMessage(null)
+
+    const emailForReset = normalizeEmail(resetEmail || email)
+    if (!isValidEmail(emailForReset)) {
+      setSubmitError("Enter a valid email before requesting a reset link.")
+      return
+    }
+
+    const resetLimit = checkRateLimit("password-reset", RESET_COOLDOWN_MS)
+    if (!resetLimit.allowed) {
+      setSubmitError(`Please wait ${Math.ceil(resetLimit.retryAfterMs / 1000)}s before requesting again.`)
+      return
+    }
+
     try {
-      await sendPasswordReset(resetEmail || email)
+      await sendPasswordReset(emailForReset)
       setResetMessage("Password reset link sent. Check your inbox.")
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Failed to send reset email.")

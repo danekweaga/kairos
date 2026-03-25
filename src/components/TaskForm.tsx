@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { TaskType } from "@/lib/kairos-types"
+import { sanitizeTaskDraft, sanitizeText } from "@/lib/validation"
 
 type TaskFormProps = {
   onAddTask: (task: { name: string; weight: number; estimatedHours: number; type: TaskType }) => void
@@ -23,12 +24,13 @@ export function TaskForm({ onAddTask }: TaskFormProps) {
 
   const isFormValid = useMemo(
     () =>
-      taskName.trim().length > 0 &&
+      sanitizeText(taskName, 120).length > 0 &&
       Number.isFinite(parsedWeight) &&
       Number.isFinite(parsedHours) &&
       parsedWeight > 0 &&
       parsedWeight <= 100 &&
-      parsedHours > 0,
+      parsedHours > 0 &&
+      parsedHours <= 200,
     [parsedHours, parsedWeight, taskName]
   )
 
@@ -36,11 +38,17 @@ export function TaskForm({ onAddTask }: TaskFormProps) {
     event.preventDefault()
     if (!isFormValid) return
 
-    onAddTask({
-      name: taskName.trim(),
+    const sanitizedTask = sanitizeTaskDraft({
+      name: taskName,
       weight: parsedWeight,
       estimatedHours: parsedHours,
       type: taskType,
+    })
+    onAddTask({
+      name: sanitizedTask.name,
+      weight: sanitizedTask.weight,
+      estimatedHours: sanitizedTask.estimatedHours,
+      type: sanitizedTask.type,
     })
 
     setTaskName("")
@@ -62,7 +70,8 @@ export function TaskForm({ onAddTask }: TaskFormProps) {
             <Input
               id="task-name"
               value={taskName}
-              onChange={(event) => setTaskName(event.target.value)}
+              maxLength={120}
+              onChange={(event) => setTaskName(sanitizeText(event.target.value, 120))}
               placeholder="Example: Review calculus chapter"
             />
           </div>
@@ -86,6 +95,7 @@ export function TaskForm({ onAddTask }: TaskFormProps) {
               id="task-hours"
               type="number"
               min={0.25}
+              max={200}
               step={0.25}
               value={estimatedHours}
               onChange={(event) => setEstimatedHours(event.target.value)}

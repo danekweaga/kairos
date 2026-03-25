@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAuth } from "@/context/AuthContext"
 import type { OnboardingFormValues } from "@/lib/kairos-types"
+import { clampNumber, sanitizeText } from "@/lib/validation"
 
 export function OnboardingPage() {
   const navigate = useNavigate()
@@ -29,7 +30,7 @@ export function OnboardingPage() {
       return Boolean(form.role) && Boolean(form.preferred_language)
     }
     if (step === 2) {
-      return Boolean(form.main_goal) && Boolean(form.preferred_session_length)
+      return sanitizeText(form.main_goal ?? "", 500).length > 0 && Number.isFinite(Number(form.preferred_session_length))
     }
     return Boolean(form.audio_preference) && Boolean(form.guidance_style)
   }, [form, step])
@@ -39,11 +40,13 @@ export function OnboardingPage() {
     setSubmitError(null)
 
     try {
+      const sanitizedGoal = sanitizeText(form.main_goal ?? "", 500)
+      const sessionLength = clampNumber(Number(form.preferred_session_length), 15, 240, 25)
       await saveOnboarding({
         role: form.role,
         preferred_language: form.preferred_language,
-        main_goal: form.main_goal,
-        preferred_session_length: Number(form.preferred_session_length),
+        main_goal: sanitizedGoal,
+        preferred_session_length: sessionLength,
         audio_preference: form.audio_preference,
         guidance_style: form.guidance_style,
       })
@@ -105,7 +108,10 @@ export function OnboardingPage() {
                 <Label>Main goal</Label>
                 <Input
                   value={form.main_goal ?? ""}
-                  onChange={(event) => setForm((prev) => ({ ...prev, main_goal: event.target.value }))}
+                  maxLength={500}
+                  onChange={(event) =>
+                    setForm((prev) => ({ ...prev, main_goal: sanitizeText(event.target.value, 500) }))
+                  }
                   placeholder="Example: Raise my exam scores"
                 />
               </div>
@@ -114,12 +120,13 @@ export function OnboardingPage() {
                 <Input
                   type="number"
                   min={15}
+                  max={240}
                   step={5}
                   value={form.preferred_session_length ?? 25}
                   onChange={(event) =>
                     setForm((prev) => ({
                       ...prev,
-                      preferred_session_length: Number(event.target.value),
+                      preferred_session_length: clampNumber(Number(event.target.value), 15, 240, 25),
                     }))
                   }
                 />

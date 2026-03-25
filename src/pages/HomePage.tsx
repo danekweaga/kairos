@@ -4,6 +4,9 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/context/AuthContext"
+import { checkRateLimit } from "@/lib/rate-limit"
+
+const RESET_COOLDOWN_MS = 15000
 
 export function HomePage() {
   const navigate = useNavigate()
@@ -68,6 +71,13 @@ export function HomePage() {
               setResetError(null)
               if (!user?.email) {
                 setResetError("No email found for this account.")
+                return
+              }
+              const resetLimit = checkRateLimit("password-reset", RESET_COOLDOWN_MS)
+              if (!resetLimit.allowed) {
+                setResetError(
+                  `Please wait ${Math.ceil(resetLimit.retryAfterMs / 1000)}s before requesting another reset link.`
+                )
                 return
               }
               try {

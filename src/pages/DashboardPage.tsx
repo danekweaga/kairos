@@ -19,6 +19,12 @@ import {
   type PersistedDashboardState,
   writeJSON,
 } from "@/lib/storage"
+import {
+  sanitizeEnergyLevel,
+  sanitizeMediaSelection,
+  sanitizeTasks,
+  sanitizeTimerDisplayMode,
+} from "@/lib/validation"
 
 const defaultMediaSelection: MediaSelection = {
   source: "none",
@@ -37,9 +43,16 @@ const defaultDashboardState: PersistedDashboardState = {
 export function DashboardPage() {
   const navigate = useNavigate()
   const { signOut } = useAuth()
-  const [restoredDashboardState] = useState<PersistedDashboardState>(() =>
-    readJSON<PersistedDashboardState>(STORAGE_KEYS.dashboard, defaultDashboardState)
-  )
+  const [restoredDashboardState] = useState<PersistedDashboardState>(() => {
+    const restored = readJSON<PersistedDashboardState>(STORAGE_KEYS.dashboard, defaultDashboardState)
+    return {
+      tasks: sanitizeTasks(restored.tasks),
+      energyLevel: sanitizeEnergyLevel(restored.energyLevel),
+      darkMode: Boolean(restored.darkMode),
+      timerDisplayMode: sanitizeTimerDisplayMode(restored.timerDisplayMode),
+      mediaSelection: sanitizeMediaSelection(restored.mediaSelection),
+    }
+  })
 
   const [tasks, setTasks] = useState<Task[]>(restoredDashboardState.tasks)
   const [energyLevel, setEnergyLevel] = useState<EnergyLevel>(restoredDashboardState.energyLevel)
@@ -71,8 +84,8 @@ export function DashboardPage() {
     const totalSeconds = Math.max(300, Math.round(recommendedTask.estimatedHours * 3600))
     const initialActiveSession: PersistedActiveSession = {
       task: recommendedTask,
-      mediaSelection,
-      timerDisplayMode,
+      mediaSelection: sanitizeMediaSelection(mediaSelection),
+      timerDisplayMode: sanitizeTimerDisplayMode(timerDisplayMode),
       darkMode,
       sessionTotalSeconds: totalSeconds,
       remainingSeconds: totalSeconds,
@@ -106,10 +119,10 @@ export function DashboardPage() {
   useEffect(() => {
     writeJSON<PersistedDashboardState>(STORAGE_KEYS.dashboard, {
       tasks,
-      energyLevel,
+      energyLevel: sanitizeEnergyLevel(energyLevel),
       darkMode,
-      timerDisplayMode,
-      mediaSelection,
+      timerDisplayMode: sanitizeTimerDisplayMode(timerDisplayMode),
+      mediaSelection: sanitizeMediaSelection(mediaSelection),
     })
   }, [darkMode, energyLevel, mediaSelection, tasks, timerDisplayMode])
 

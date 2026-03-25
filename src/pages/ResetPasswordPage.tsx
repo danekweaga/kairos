@@ -9,10 +9,11 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useAuth } from "@/context/AuthContext"
 import { supabase } from "@/lib/supabase"
+import { validatePasswordStrength } from "@/lib/validation"
 
 export function ResetPasswordPage() {
   const navigate = useNavigate()
-  const { loading, error, signOut, updatePassword } = useAuth()
+  const { loading, signOut, updatePassword } = useAuth()
   const [newPassword, setNewPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
   const [submitError, setSubmitError] = useState<string | null>(null)
@@ -27,6 +28,30 @@ export function ResetPasswordPage() {
 
     async function checkRecoverySession() {
       try {
+        if (typeof window !== "undefined") {
+          const params = new URLSearchParams(window.location.search)
+          const redirectError =
+            params.get("error_description") ??
+            params.get("error") ??
+            params.get("message")
+
+          if (redirectError) {
+            setSessionReady(false)
+            setSubmitError(decodeURIComponent(redirectError).replace(/\+/g, " "))
+            return
+          }
+
+          const code = params.get("code")
+          if (code) {
+            const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+            if (exchangeError) {
+              setSessionReady(false)
+              setSubmitError(exchangeError.message)
+              return
+            }
+          }
+        }
+
         const {
           data: { session },
         } = await supabase.auth.getSession()
@@ -51,8 +76,22 @@ export function ResetPasswordPage() {
 
     checkRecoverySession()
 
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (!isMounted) return
+      if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
+        setSessionReady(Boolean(nextSession?.user))
+        if (nextSession?.user) {
+          setSubmitError(null)
+        }
+        setCheckingSession(false)
+      }
+    })
+
     return () => {
       isMounted = false
+      subscription.unsubscribe()
     }
   }, [])
 
@@ -66,8 +105,9 @@ export function ResetPasswordPage() {
       return
     }
 
-    if (newPassword.length < 6) {
-      setSubmitError("Password must be at least 6 characters.")
+    const passwordError = validatePasswordStrength(newPassword)
+    if (passwordError) {
+      setSubmitError(passwordError)
       return
     }
 
@@ -80,7 +120,7 @@ export function ResetPasswordPage() {
       await updatePassword(newPassword)
       setSuccessMessage("Password updated successfully. You can now log in.")
       await signOut()
-      setTimeout(() => navigate("/login", { replace: true }), 1200)
+      window.setTimeout(() => navigate("/login", { replace: true }), 1200)
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Failed to update password.")
     }
@@ -102,7 +142,7 @@ export function ResetPasswordPage() {
               id="new-password"
               type={showNewPassword ? "text" : "password"}
               required
-              minLength={6}
+              minLength={8}
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
               className="h-14 rounded-xl border-0 bg-[#f1f4f6] py-4 pr-12 pl-11 text-[#2b3437] placeholder:text-[#737c7f]/50 transition-all duration-300 focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#d2d0ff]"
@@ -128,7 +168,7 @@ export function ResetPasswordPage() {
               id="confirm-password"
               type={showConfirmPassword ? "text" : "password"}
               required
-              minLength={6}
+              minLength={8}
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
               className="h-14 rounded-xl border-0 bg-[#f1f4f6] py-4 pr-12 pl-11 text-[#2b3437] placeholder:text-[#737c7f]/50 transition-all duration-300 focus-visible:bg-white focus-visible:ring-2 focus-visible:ring-[#d2d0ff]"
@@ -144,7 +184,7 @@ export function ResetPasswordPage() {
           </div>
         </div>
 
-        {(submitError || error) ? <p className="text-sm text-destructive">{submitError ?? error}</p> : null}
+        {submitError ? <p className="text-sm text-destructive">{submitError}</p> : null}
         {successMessage ? <p className="text-sm text-emerald-600">{successMessage}</p> : null}
         {checkingSession ? (
           <p className="text-sm text-muted-foreground">Verifying reset link...</p>

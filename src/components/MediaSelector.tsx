@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import type { MediaSelection, MediaSource } from "@/lib/kairos-types"
 import { detectMediaSource, getEmbeddableMedia, isDirectAudioUrl } from "@/lib/session-helpers"
+import { isValidHttpUrl, sanitizeText } from "@/lib/validation"
 
 type MediaSelectorProps = {
   media: MediaSelection
@@ -41,6 +42,7 @@ function sourceLabel(source: MediaSource): string {
 export function MediaSelector({ media, onChange }: MediaSelectorProps) {
   const inferredSource = media.url ? detectMediaSource(media.url) : "unknown"
   const embeddable = useMemo(() => getEmbeddableMedia(media.url), [media.url])
+  const safeMediaUrl = media.url && isValidHttpUrl(media.url) ? media.url : ""
 
   return (
     <Card>
@@ -88,7 +90,7 @@ export function MediaSelector({ media, onChange }: MediaSelectorProps) {
                   onClick={() =>
                     onChange({
                       source: "preset",
-                      title: preset.title,
+                  title: sanitizeText(preset.title, 120),
                       url: preset.url,
                     })
                   }
@@ -110,15 +112,18 @@ export function MediaSelector({ media, onChange }: MediaSelectorProps) {
                 onChange({
                   ...media,
                   url: event.target.value.trim(),
-                  title: media.title || "Custom media",
+                  title: sanitizeText(media.title || "Custom media", 120),
                 })
               }
               placeholder="https://..."
             />
+            {media.url && !safeMediaUrl ? (
+              <p className="text-sm text-destructive">Use a valid http(s) link.</p>
+            ) : null}
           </div>
         ) : null}
 
-        {media.url ? (
+        {safeMediaUrl ? (
           <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
             <p className="text-sm text-muted-foreground">
               Source: {sourceLabel(media.source)}{" "}
@@ -126,9 +131,9 @@ export function MediaSelector({ media, onChange }: MediaSelectorProps) {
             </p>
             {media.title ? <p className="text-sm font-medium">{media.title}</p> : null}
 
-            {isDirectAudioUrl(media.url) ? (
+            {isDirectAudioUrl(safeMediaUrl) ? (
               <audio controls className="w-full">
-                <source src={media.url} />
+                <source src={safeMediaUrl} />
               </audio>
             ) : embeddable ? (
               <iframe
@@ -147,7 +152,7 @@ export function MediaSelector({ media, onChange }: MediaSelectorProps) {
             <Button
               type="button"
               variant="outline"
-              onClick={() => window.open(media.url, "_blank", "noopener,noreferrer")}
+              onClick={() => window.open(safeMediaUrl, "_blank", "noopener,noreferrer")}
             >
               Open Link
             </Button>

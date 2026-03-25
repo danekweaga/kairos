@@ -14,6 +14,12 @@ import type {
 } from "@/lib/kairos-types"
 import { extendSessionByQuarter, getCheckpointStage, getPauseAllowance } from "@/lib/session-helpers"
 import { readJSON, removeStoredValue, STORAGE_KEYS, type PersistedActiveSession, writeJSON } from "@/lib/storage"
+import {
+  clampNumber,
+  sanitizeMediaSelection,
+  sanitizeTask,
+  sanitizeTimerDisplayMode,
+} from "@/lib/validation"
 
 type FocusRouteState = {
   task?: Task
@@ -29,16 +35,41 @@ export function FocusSessionPage() {
   const [storedSession] = useState<PersistedActiveSession | null>(() =>
     readJSON<PersistedActiveSession | null>(STORAGE_KEYS.activeSession, null)
   )
-  const routeTask = state?.task
-  const task = routeTask ?? storedSession?.task ?? null
+  const routeTask = state?.task ? sanitizeTask(state.task) : null
+  const safeStoredSession = storedSession
+    ? {
+        ...storedSession,
+        task: sanitizeTask(storedSession.task),
+        mediaSelection: sanitizeMediaSelection(storedSession.mediaSelection),
+        timerDisplayMode: sanitizeTimerDisplayMode(storedSession.timerDisplayMode),
+        darkMode: Boolean(storedSession.darkMode),
+        sessionTotalSeconds: clampNumber(storedSession.sessionTotalSeconds, 60, 86400, 300),
+        remainingSeconds: clampNumber(storedSession.remainingSeconds, 0, 86400, 300),
+        currentCheckpoint: clampNumber(storedSession.currentCheckpoint, 25, 100, 25),
+        checkpointHistory: Array.isArray(storedSession.checkpointHistory)
+          ? storedSession.checkpointHistory
+              .map((item) => clampNumber(Number(item), 25, 100, 25))
+              .filter((value, index, values) => values.indexOf(value) === index)
+          : [],
+        breakCount: Math.round(clampNumber(storedSession.breakCount, 0, 100, 0)),
+        pauseUsed: Math.round(clampNumber(storedSession.pauseUsed, 0, 100, 0)),
+        pausedByUser: Boolean(storedSession.pausedByUser),
+        isRunning: Boolean(storedSession.isRunning),
+      }
+    : null
+  const task = routeTask ?? safeStoredSession?.task ?? null
 
   const [mediaSelection, setMediaSelection] = useState<MediaSelection>(
-    state?.media ?? storedSession?.mediaSelection ?? { source: "none", url: "", title: "" }
+    state?.media
+      ? sanitizeMediaSelection(state.media)
+      : safeStoredSession?.mediaSelection ?? { source: "none", url: "", title: "" }
   )
   const [timerDisplayMode, setTimerDisplayMode] = useState<TimerDisplayMode>(
-    state?.timerDisplayMode ?? storedSession?.timerDisplayMode ?? "large"
+    state?.timerDisplayMode
+      ? sanitizeTimerDisplayMode(state.timerDisplayMode)
+      : safeStoredSession?.timerDisplayMode ?? "large"
   )
-  const [darkMode, setDarkMode] = useState(state?.darkMode ?? storedSession?.darkMode ?? false)
+  const [darkMode, setDarkMode] = useState(state?.darkMode ?? safeStoredSession?.darkMode ?? false)
   const [focusViewMode, setFocusViewMode] = useState<FocusViewMode>("default")
 
   const baseSeconds = useMemo(
@@ -47,21 +78,21 @@ export function FocusSessionPage() {
   )
 
   const [sessionTotalSeconds, setSessionTotalSeconds] = useState(
-    routeTask ? baseSeconds : storedSession?.sessionTotalSeconds ?? baseSeconds
+    routeTask ? baseSeconds : safeStoredSession?.sessionTotalSeconds ?? baseSeconds
   )
   const [remainingSeconds, setRemainingSeconds] = useState(
-    routeTask ? baseSeconds : storedSession?.remainingSeconds ?? baseSeconds
+    routeTask ? baseSeconds : safeStoredSession?.remainingSeconds ?? baseSeconds
   )
-  const [isRunning, setIsRunning] = useState(routeTask ? true : storedSession?.isRunning ?? false)
+  const [isRunning, setIsRunning] = useState(routeTask ? true : safeStoredSession?.isRunning ?? false)
   const [currentCheckpoint, setCurrentCheckpoint] = useState(
-    routeTask ? 25 : storedSession?.currentCheckpoint ?? 25
+    routeTask ? 25 : safeStoredSession?.currentCheckpoint ?? 25
   )
   const [checkpointHistory, setCheckpointHistory] = useState<number[]>(
-    routeTask ? [] : storedSession?.checkpointHistory ?? []
+    routeTask ? [] : safeStoredSession?.checkpointHistory ?? []
   )
-  const [breakCount, setBreakCount] = useState(routeTask ? 0 : storedSession?.breakCount ?? 0)
-  const [pauseUsed, setPauseUsed] = useState(routeTask ? 0 : storedSession?.pauseUsed ?? 0)
-  const [pausedByUser, setPausedByUser] = useState(routeTask ? false : storedSession?.pausedByUser ?? false)
+  const [breakCount, setBreakCount] = useState(routeTask ? 0 : safeStoredSession?.breakCount ?? 0)
+  const [pauseUsed, setPauseUsed] = useState(routeTask ? 0 : safeStoredSession?.pauseUsed ?? 0)
+  const [pausedByUser, setPausedByUser] = useState(routeTask ? false : safeStoredSession?.pausedByUser ?? false)
   const [checkInOpen, setCheckInOpen] = useState(false)
   const [breakOpen, setBreakOpen] = useState(false)
   const [showCelebration, setShowCelebration] = useState(false)
@@ -254,8 +285,8 @@ export function FocusSessionPage() {
 
     writeJSON<PersistedActiveSession>(STORAGE_KEYS.activeSession, {
       task,
-      mediaSelection,
-      timerDisplayMode,
+      mediaSelection: sanitizeMediaSelection(mediaSelection),
+      timerDisplayMode: sanitizeTimerDisplayMode(timerDisplayMode),
       darkMode,
       sessionTotalSeconds,
       remainingSeconds,
