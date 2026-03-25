@@ -30,20 +30,127 @@ export function ResetPasswordPage() {
       try {
         if (typeof window !== "undefined") {
           const params = new URLSearchParams(window.location.search)
+          const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""))
           const redirectError =
             params.get("error_description") ??
             params.get("error") ??
             params.get("message")
 
           if (redirectError) {
+            // #region agent log
+            fetch("http://127.0.0.1:7813/ingest/5b4830d4-73b3-470d-a8be-4731797e0582", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "f0655d" },
+              body: JSON.stringify({
+                sessionId: "f0655d",
+                runId: "reset-diagnose",
+                hypothesisId: "H2",
+                location: "ResetPasswordPage.tsx:checkRecoverySession",
+                message: "redirect_error_param_detected",
+                data: {
+                  hasRedirectError: true,
+                  hasCodeParam: Boolean(params.get("code")),
+                  searchLength: window.location.search.length,
+                  hashLength: window.location.hash.length,
+                },
+                timestamp: Date.now(),
+              }),
+            }).catch(() => {})
+            // #endregion
+
             setSessionReady(false)
             setSubmitError(decodeURIComponent(redirectError).replace(/\+/g, " "))
             return
           }
 
           const code = params.get("code")
+          const hashType = hashParams.get("type")
+          const hashAccessToken = hashParams.get("access_token")
+          const hashRefreshToken = hashParams.get("refresh_token")
+
+          // #region agent log
+          fetch("http://127.0.0.1:7813/ingest/5b4830d4-73b3-470d-a8be-4731797e0582", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "f0655d" },
+            body: JSON.stringify({
+              sessionId: "f0655d",
+              runId: "reset-diagnose",
+              hypothesisId: "H2",
+              location: "ResetPasswordPage.tsx:checkRecoverySession",
+              message: "initial_url_state",
+              data: {
+                hasCodeParam: Boolean(code),
+                hashType,
+                hasHashAccessToken: Boolean(hashAccessToken),
+                hasHashRefreshToken: Boolean(hashRefreshToken),
+                searchLength: window.location.search.length,
+                hashLength: window.location.hash.length,
+              },
+              timestamp: Date.now(),
+            }),
+          }).catch(() => {})
+          // #endregion
+
+          if (!code && hashType === "recovery" && hashAccessToken && hashRefreshToken) {
+            const hashSessionStart = typeof performance !== "undefined" ? performance.now() : Date.now()
+            const { error: hashSessionError } = await supabase.auth.setSession({
+              access_token: hashAccessToken,
+              refresh_token: hashRefreshToken,
+            })
+            const hashSessionMs =
+              (typeof performance !== "undefined" ? performance.now() : Date.now()) - hashSessionStart
+
+            // #region agent log
+            fetch("http://127.0.0.1:7813/ingest/5b4830d4-73b3-470d-a8be-4731797e0582", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "f0655d" },
+              body: JSON.stringify({
+                sessionId: "f0655d",
+                runId: "post-fix",
+                hypothesisId: "H2",
+                location: "ResetPasswordPage.tsx:checkRecoverySession",
+                message: "hash_session_result",
+                data: {
+                  hasHashSessionError: Boolean(hashSessionError),
+                  hashSessionMs: Math.round(hashSessionMs),
+                },
+                timestamp: Date.now(),
+              }),
+            }).catch(() => {})
+            // #endregion
+
+            if (hashSessionError) {
+              setSessionReady(false)
+              setSubmitError(hashSessionError.message)
+              return
+            }
+          }
+
           if (code) {
+            const exchangeStart = typeof performance !== "undefined" ? performance.now() : Date.now()
             const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code)
+            const exchangeMs =
+              (typeof performance !== "undefined" ? performance.now() : Date.now()) - exchangeStart
+
+            // #region agent log
+            fetch("http://127.0.0.1:7813/ingest/5b4830d4-73b3-470d-a8be-4731797e0582", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "f0655d" },
+              body: JSON.stringify({
+                sessionId: "f0655d",
+                runId: "reset-diagnose",
+                hypothesisId: "H3",
+                location: "ResetPasswordPage.tsx:checkRecoverySession",
+                message: "exchange_code_result",
+                data: {
+                  hasExchangeError: Boolean(exchangeError),
+                  exchangeMs: Math.round(exchangeMs),
+                },
+                timestamp: Date.now(),
+              }),
+            }).catch(() => {})
+            // #endregion
+
             if (exchangeError) {
               setSessionReady(false)
               setSubmitError(exchangeError.message)
@@ -52,18 +159,56 @@ export function ResetPasswordPage() {
           }
         }
 
+        const getSessionStart = typeof performance !== "undefined" ? performance.now() : Date.now()
         const {
           data: { session },
         } = await supabase.auth.getSession()
+        const getSessionMs = (typeof performance !== "undefined" ? performance.now() : Date.now()) - getSessionStart
 
         if (!isMounted) return
         setSessionReady(Boolean(session?.user))
+
+        // #region agent log
+        fetch("http://127.0.0.1:7813/ingest/5b4830d4-73b3-470d-a8be-4731797e0582", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "f0655d" },
+          body: JSON.stringify({
+            sessionId: "f0655d",
+            runId: "reset-diagnose",
+            hypothesisId: "H2",
+            location: "ResetPasswordPage.tsx:checkRecoverySession",
+            message: "get_session_result",
+            data: {
+              hasSessionUser: Boolean(session?.user),
+              getSessionMs: Math.round(getSessionMs),
+            },
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {})
+        // #endregion
+
         if (!session?.user) {
           setSubmitError(
             "Recovery link is missing or expired. Request a new reset email and verify your Supabase redirect URL points to /reset-password."
           )
         }
       } catch {
+        // #region agent log
+        fetch("http://127.0.0.1:7813/ingest/5b4830d4-73b3-470d-a8be-4731797e0582", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "f0655d" },
+          body: JSON.stringify({
+            sessionId: "f0655d",
+            runId: "reset-diagnose",
+            hypothesisId: "H3",
+            location: "ResetPasswordPage.tsx:checkRecoverySession",
+            message: "get_session_exception",
+            data: {},
+            timestamp: Date.now(),
+          }),
+        }).catch(() => {})
+        // #endregion
+
         if (!isMounted) return
         setSessionReady(false)
         setSubmitError("Could not verify your recovery session. Please request a new reset link.")
@@ -80,6 +225,21 @@ export function ResetPasswordPage() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((event, nextSession) => {
       if (!isMounted) return
+      // #region agent log
+      fetch("http://127.0.0.1:7813/ingest/5b4830d4-73b3-470d-a8be-4731797e0582", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "f0655d" },
+        body: JSON.stringify({
+          sessionId: "f0655d",
+          runId: "reset-diagnose",
+          hypothesisId: "H2",
+          location: "ResetPasswordPage.tsx:onAuthStateChange",
+          message: "auth_state_change_event",
+          data: { event, hasUser: Boolean(nextSession?.user) },
+          timestamp: Date.now(),
+        }),
+      }).catch(() => {})
+      // #endregion
       if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") {
         setSessionReady(Boolean(nextSession?.user))
         if (nextSession?.user) {
@@ -99,6 +259,26 @@ export function ResetPasswordPage() {
     event.preventDefault()
     setSubmitError(null)
     setSuccessMessage(null)
+
+    // #region agent log
+    fetch("http://127.0.0.1:7813/ingest/5b4830d4-73b3-470d-a8be-4731797e0582", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Debug-Session-Id": "f0655d" },
+      body: JSON.stringify({
+        sessionId: "f0655d",
+        runId: "reset-diagnose",
+        hypothesisId: "H4",
+        location: "ResetPasswordPage.tsx:handleSubmit",
+        message: "submit_attempt",
+        data: {
+          sessionReady,
+          newPasswordLen: newPassword.length,
+          confirmMatches: newPassword === confirmPassword,
+        },
+        timestamp: Date.now(),
+      }),
+    }).catch(() => {})
+    // #endregion
 
     if (!sessionReady) {
       setSubmitError("No valid recovery session found. Request a new reset link.")
