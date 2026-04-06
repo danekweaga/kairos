@@ -8,7 +8,9 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useAuth } from "@/context/AuthContext"
 import type { OnboardingFormValues } from "@/lib/kairos-types"
-import { clampNumber, sanitizeText } from "@/lib/validation"
+import { clampNumber, sanitizeText, truncateText } from "@/lib/validation"
+
+const DEFAULT_PREFERRED_LANGUAGE = "english"
 
 export function OnboardingPage() {
   const navigate = useNavigate()
@@ -27,10 +29,10 @@ export function OnboardingPage() {
 
   const isStepValid = useMemo(() => {
     if (step === 1) {
-      return Boolean(form.role) && Boolean(form.preferred_language)
+      return Boolean(form.role)
     }
     if (step === 2) {
-      return sanitizeText(form.main_goal ?? "", 500).length > 0 && Number.isFinite(Number(form.preferred_session_length))
+      return (form.main_goal ?? "").trim().length > 0 && Number.isFinite(Number(form.preferred_session_length))
     }
     return Boolean(form.audio_preference) && Boolean(form.guidance_style)
   }, [form, step])
@@ -44,7 +46,7 @@ export function OnboardingPage() {
       const sessionLength = clampNumber(Number(form.preferred_session_length), 15, 240, 25)
       await saveOnboarding({
         role: form.role,
-        preferred_language: form.preferred_language,
+        preferred_language: profile?.preferred_language?.trim() || DEFAULT_PREFERRED_LANGUAGE,
         main_goal: sanitizedGoal,
         preferred_session_length: sessionLength,
         audio_preference: form.audio_preference,
@@ -65,40 +67,21 @@ export function OnboardingPage() {
         </CardHeader>
         <CardContent className="space-y-4">
           {step === 1 ? (
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label>Role</Label>
-                <Select
-                  value={form.role ?? ""}
-                  onValueChange={(value) => setForm((prev) => ({ ...prev, role: value }))}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Select your role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="student">Student</SelectItem>
-                    <SelectItem value="professional">Professional</SelectItem>
-                    <SelectItem value="creator">Creator</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Preferred language</Label>
-                <Select
-                  value={form.preferred_language ?? ""}
-                  onValueChange={(value) => setForm((prev) => ({ ...prev, preferred_language: value }))}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Choose language" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="english">English</SelectItem>
-                    <SelectItem value="spanish">Spanish</SelectItem>
-                    <SelectItem value="french">French</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="space-y-2">
+              <Label>Role</Label>
+              <Select
+                value={form.role ?? ""}
+                onValueChange={(value) => setForm((prev) => ({ ...prev, role: value }))}
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select your role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="student">Student</SelectItem>
+                  <SelectItem value="professional">Professional</SelectItem>
+                  <SelectItem value="creator">Creator</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           ) : null}
 
@@ -110,7 +93,7 @@ export function OnboardingPage() {
                   value={form.main_goal ?? ""}
                   maxLength={500}
                   onChange={(event) =>
-                    setForm((prev) => ({ ...prev, main_goal: sanitizeText(event.target.value, 500) }))
+                    setForm((prev) => ({ ...prev, main_goal: truncateText(event.target.value, 500) }))
                   }
                   placeholder="Example: Raise my exam scores"
                 />

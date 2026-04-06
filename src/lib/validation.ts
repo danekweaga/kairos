@@ -36,6 +36,11 @@ export function sanitizeText(input: string, maxLength: number): string {
   return input.trim().slice(0, maxLength)
 }
 
+/** Length cap only; preserves spaces while typing (use sanitizeText on submit). */
+export function truncateText(input: string, maxLength: number): string {
+  return input.slice(0, maxLength)
+}
+
 export function clampNumber(value: number, min: number, max: number, fallback: number): number {
   if (!Number.isFinite(value)) return fallback
   return Math.min(max, Math.max(min, value))

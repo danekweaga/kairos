@@ -3,9 +3,13 @@ import { Navigate, Outlet } from "react-router-dom"
 import { useAuth } from "@/context/AuthContext"
 
 export function OnboardingGate() {
-  const { profile, loading } = useAuth()
+  const { profile, profileLoading, user, loading } = useAuth()
 
   if (loading) {
+    return null
+  }
+
+  if (user && profileLoading) {
     return null
   }
 

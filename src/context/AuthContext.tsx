@@ -19,6 +19,8 @@ type AuthContextValue = {
   user: User | null
   profile: Profile | null
   loading: boolean
+  /** True while the first profile fetch for the current user is in flight (session already known). */
+  profileLoading: boolean
   initError: string | null
   error: string | null
   signIn: (email: string, password: string) => Promise<void>
@@ -53,6 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null)
   const [user, setUser] = useState<User | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
+  const [profileLoading, setProfileLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [initError, setInitError] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -93,14 +96,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(existingSession?.user ?? null)
 
         if (existingSession?.user) {
-          try {
-            await loadProfile(existingSession.user.id)
-          } catch {
-            // Do not block auth flows (including password recovery) on profile errors.
-            setProfile(null)
-          }
+          setProfileLoading(true)
+          void loadProfile(existingSession.user.id)
+            .catch(() => {
+              if (isMounted) {
+                setProfile(null)
+              }
+            })
+            .finally(() => {
+              if (isMounted) {
+                setProfileLoading(false)
+              }
+            })
         } else {
           setProfile(null)
+          setProfileLoading(false)
         }
       } catch (err) {
         if (!isMounted) return
@@ -122,14 +132,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setInitError(null)
 
       if (nextSession?.user) {
+        setProfileLoading(true)
         try {
           await loadProfile(nextSession.user.id)
         } catch {
-          // Keep auth session usable even when profile lookup fails.
           setProfile(null)
+        } finally {
+          setProfileLoading(false)
         }
       } else {
         setProfile(null)
+        setProfileLoading(false)
       }
       setLoading(false)
     })
@@ -272,6 +285,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       profile,
       loading,
+      profileLoading,
       initError,
       error,
       signIn,
@@ -287,6 +301,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       initError,
       loading,
       profile,
+      profileLoading,
       refreshProfile,
       saveOnboarding,
       sendPasswordReset,
