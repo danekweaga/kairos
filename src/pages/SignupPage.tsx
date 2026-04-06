@@ -45,7 +45,7 @@ export function SignupPage() {
 
     try {
       await signUp(normalizedEmail, password)
-      navigate("/onboarding", { replace: true })
+      navigate("/how-to-use?intro=1", { replace: true })
     } catch (err) {
       setSubmitError(err instanceof Error ? err.message : "Unable to create account.")
     }

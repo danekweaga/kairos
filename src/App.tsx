@@ -26,11 +26,11 @@ function App() {
         </Route>
 
         <Route element={<ProtectedRoute />}>
+          <Route path="/how-to-use" element={<HowToUsePage />} />
           <Route path="/onboarding" element={<OnboardingPage />} />
 
           <Route element={<OnboardingGate />}>
             <Route path="/home" element={<HomePage />} />
-            <Route path="/how-to-use" element={<HowToUsePage />} />
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/focus" element={<FocusSessionPage />} />
           </Route>
