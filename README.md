@@ -1,35 +1,187 @@
 # Kairos
 
-Kairos is a focus-planning web app that helps you pick the right task for your current energy, start a guided focus session, and adapt when you get stuck.
+Kairos is a focus operating system for people who do cognitively expensive work and need help deciding what to do next, not just tracking time.
 
-## What it does
+## 1) Overview
 
-- Plan tasks by ROI (`weight / estimatedHours`)
-- Match work to energy level (`low`, `medium`, `high`)
-- Run guided focus sessions with:
-  - countdown timer
-  - progress checkpoints
-  - pause allowances
-  - break recommendations based on how you feel
-- Customize theme and timer size
-- Use optional media during sessions
+Kairos is a web app that turns a rough task backlog into a guided focus session with clear next actions.
 
-## Tech stack
+It is built for students, founders, creators, and professionals who:
+- have multiple important tasks competing for attention,
+- do not always have the same energy level throughout the day,
+- and need a practical way to recover when focus breaks down.
 
-- React + TypeScript + Vite
-- Tailwind CSS
-- React Router
-- Supabase Auth + Supabase database (`profiles` table)
+The problem it solves is not "how to run a timer." The problem is "how to pick the right task for this moment, stay with it, and recover quickly when the session goes off track."
 
-## Prerequisites
+## 2) Why This Exists
 
-- Node.js 20+ (recommended)
+Most productivity tools are either:
+- static planners (good at storing tasks, weak at execution), or
+- generic timer tools (good at counting minutes, weak at task selection and adaptation).
+
+In real work, friction happens in three places:
+1. Choosing the next task under uncertainty.
+2. Maintaining momentum after 20-40 minutes.
+3. Recovering from mental states like overload, distraction, or fatigue.
+
+Kairos exists to connect those three phases into one flow instead of forcing users to stitch together planning apps, timer apps, and ad-hoc break habits.
+
+## 3) Core Idea
+
+Kairos treats a focus block as a decision system, not a stopwatch.
+
+The core model is:
+- prioritize by task return (`weight / estimatedHours`),
+- filter by current energy state (low, medium, high),
+- run a structured session with checkpoints and bounded pause rules,
+- then adapt behavior based on how the user feels when they get stuck.
+
+The differentiator is the tight coupling between selection logic and in-session adaptation. The recommendation engine and the session engine share context, so the product can react without being unpredictable.
+
+## 4) Key Features
+
+- **ROI-driven task ranking**  
+  Tasks are sorted by `weight / estimatedHours` so prioritization favors high-impact, low-friction work instead of urgency theater.
+
+- **Energy-aware recommendation**  
+  Current energy state maps to task depth (`deep`, `medium`, `shallow`) so recommendations match cognitive capacity in real time.
+
+- **Guided session loop**  
+  Focus sessions include checkpoints, pause allowances, and continuation logic so a user is never left with a blank "now what?" moment.
+
+- **Break recommendation with feeling classification**  
+  Break suggestions are generated from quick feelings or free-text input and include reason + suggested action, not just a duration.
+
+- **Special focus display modes**  
+  Fullscreen and mini-corner clock modes support different work environments (immersive mode vs multitasking mode).
+
+- **State resilience across refreshes**  
+  Dashboard and active session state are persisted in local storage with sanitization, so accidental refreshes do not destroy work context.
+
+- **Secure auth and reset flows**  
+  Reset-password handling supports both code-based and hash-token Supabase recovery links, with explicit validation and failure messaging.
+
+## 5) Architecture & Tech Stack
+
+### Frontend
+- **React + TypeScript + Vite**
+  - React was chosen for predictable state composition across route guards, onboarding, dashboard, and focus session flows.
+  - TypeScript is used to keep domain types (`Task`, `Profile`, session state) explicit and prevent drift as flows evolve.
+  - Vite keeps iteration fast and build config minimal for a hackathon-friendly but production-capable setup.
+
+- **React Router**
+  - Routing is deliberately split by access concerns:
+    - `PublicOnlyRoute` for anonymous screens,
+    - `ProtectedRoute` for authenticated screens,
+    - `OnboardingGate` for post-auth profile readiness.
+  - This keeps policy decisions centralized instead of sprinkled across pages.
+
+- **Tailwind + shadcn-style component primitives**
+  - Utility-first styling keeps UI changes fast without CSS sprawl.
+  - Component primitives enforce consistency in forms, cards, dialogs, and buttons.
+
+### Backend/Platform
+- **Supabase Auth + Postgres**
+  - Supabase gives a practical authentication + database baseline without building a custom auth backend.
+  - Postgres-backed `profiles` support onboarding and personalization state with RLS boundaries.
+
+- **Row Level Security**
+  - User-owned data is scoped to `auth.uid()` policies to prevent cross-user reads/writes from client-side mistakes.
+
+### Client-side persistence
+- **localStorage wrappers**
+  - Used for session continuity and dashboard persistence in a way that is easy to reason about and sanitize.
+  - Kept intentionally lightweight; this project does not require a full server-side session orchestration layer.
+
+## 6) How It Works
+
+### User flow
+1. User signs up or logs in.
+2. New users see the "How to Use" intro, then onboarding.
+3. On onboarding completion, profile preferences are saved to Supabase.
+4. On dashboard, user adds tasks, selects energy, and receives a recommendation.
+5. Starting a session creates active-session state and enters focus mode.
+6. During the session, checkpoints and break logic guide recovery and continuation.
+7. Session completion returns user to planning with updated context.
+
+### Data flow
+- **Auth/session layer**  
+  `supabase.auth.getSession()` initializes auth state and route guards.
+
+- **Profile layer**  
+  Profile is loaded from Supabase (`profiles`), sanitized on write, and used by onboarding/home flows.
+
+- **Planning layer**  
+  Task list + energy + media preferences are persisted in local storage and sanitized on read.
+
+- **Recommendation layer**  
+  `session-helpers.ts` computes ROI ranking and energy-fit task recommendation.
+
+- **Execution layer**  
+  Active session state is persisted and resumed from local storage, with break/checkpoint events driving UI transitions.
+
+## 7) Key Technical Decisions
+
+- **Deterministic recommendation logic before any "AI-like" behavior**  
+  Task selection is deterministic (`ROI + energy mapping`) so outcomes are explainable and debuggable.  
+  Tradeoff: less novelty than ML ranking, but significantly more trust and maintainability.
+
+- **Non-blocking profile load after session initialization**  
+  Auth loading is cleared as soon as session is known, and profile fetch continues in parallel.  
+  Tradeoff: brief window where profile is null, handled by route gating; payoff is faster perceived startup.
+
+- **Dual recovery-link support in reset flow**  
+  Both `?code=` and `#access_token` styles are supported because Supabase redirect behavior can vary across auth settings/environments.  
+  Tradeoff: more branch handling in one page; payoff is fewer production reset failures.
+
+- **Sanitize-at-boundary strategy**  
+  Inputs are validated/sanitized at form boundaries and before persistence (auth inputs, tasks, onboarding, media URLs, restored local storage).  
+  Tradeoff: some duplication across layers; payoff is resilience against malformed state and accidental injection vectors.
+
+## 8) Challenges & Solutions
+
+- **Reset password links intermittently failed**  
+  Cause: inconsistent redirect/session token handling across environments.  
+  Fix: explicit recovery session checks, code exchange support, hash-token support, and clearer error states.
+
+- **Users could lose active-session context on refresh**  
+  Cause: volatile in-memory state in focus flow.  
+  Fix: typed local-storage persistence (`PersistedActiveSession`) with sanitization on restore.
+
+- **Break guidance felt vague and ignorable**  
+  Cause: one-size-fits-all break suggestions.  
+  Fix: classify feelings (including custom text keyword mapping) and return structured break rationale + actions.
+
+- **Startup felt slow on low-power laptops**  
+  Cause: auth and profile loading were serialized before route rendering.  
+  Fix: decouple initial auth readiness from profile fetch and guard profile-dependent routes explicitly.
+
+## 9) Limitations
+
+- This is still a client-heavy SPA; most planning/session state is local-first and not yet collaborative across devices.
+- Recommendation strategy is intentionally simple and rule-based; it does not learn from historical outcomes yet.
+- Bundle size can still be improved (single large chunk warning appears in production build).
+- Current observability is basic (console + direct UI states), not a full structured telemetry pipeline.
+
+## 10) Future Improvements
+
+- Add route-level code splitting to reduce initial JavaScript parse/execute cost.
+- Add sync of dashboard/session state to Supabase for multi-device continuity.
+- Add richer analytics on checkpoint outcomes to tune recommendation quality.
+- Add optional calendar/deadline context into ranking (without replacing deterministic core logic).
+- Expand test coverage around auth edge cases and session-resume behavior.
+
+---
+
+## Local Setup
+
+### Prerequisites
+- Node.js 20+
 - npm
-- A Supabase project
+- Supabase project
 
-## Environment variables
-
-Copy `.env.example` to `.env` in the project root:
+### Environment variables
+Create `.env` from `.env.example`:
 
 ```bash
 VITE_SUPABASE_URL=your_supabase_project_url
@@ -37,146 +189,11 @@ VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
 VITE_APP_ORIGIN=http://localhost:5173
 ```
 
-Kairos requires both variables at startup. If either is missing, the app throws an error from `src/lib/supabase.ts`.
-Use `VITE_APP_ORIGIN` to control password reset redirect origin in multi-environment setups.
-
-## Install and run
-
+### Commands
 ```bash
 npm install
 npm run dev
+npm run build
+npm run lint
 ```
-
-App runs on Vite's local dev server (usually `http://localhost:5173`).
-
-## Scripts
-
-- `npm run dev` - Start development server
-- `npm run build` - Type-check and build for production
-- `npm run preview` - Preview the production build locally
-- `npm run lint` - Run ESLint
-
-## App flow and routes
-
-Public routes:
-
-- `/` - Landing page
-- `/login` - Log in
-- `/signup` - Create account
-- `/reset-password` - Reset password
-
-Protected routes:
-
-- `/onboarding` - First-time profile setup
-- `/home` - User home
-- `/dashboard` - Planning dashboard
-- `/focus` - Active focus session
-
-Route guards in `src/App.tsx`:
-
-- `PublicOnlyRoute` for unauthenticated pages
-- `ProtectedRoute` for authenticated pages
-- `OnboardingGate` to ensure onboarding completion before main app pages
-
-## Core usage
-
-1. Sign up or log in.
-2. Complete onboarding (saved in the `profiles` table).
-3. Add tasks on the dashboard (`name`, `weight`, `estimatedHours`, `type`).
-4. Select your energy level.
-5. Start the recommended focus session.
-6. During focus:
-   - track time and progress
-   - respond to checkpoints
-   - use pause and break tools when needed
-
-## Supabase notes
-
-Kairos expects a `profiles` table keyed by auth user id (`id`) and reads/writes fields used in `src/lib/kairos-types.ts`, including:
-
-- `role`
-- `preferred_language`
-- `main_goal`
-- `preferred_session_length`
-- `audio_preference`
-- `guidance_style`
-- `onboarding_completed`
-
-### Password reset configuration
-
-In Supabase dashboard (`Authentication -> URL Configuration`), add all redirect URLs used by Kairos:
-
-- `http://localhost:5173/reset-password`
-- `https://<your-production-domain>/reset-password`
-- Optional preview URLs if you test Vercel previews
-
-If redirect URLs are missing, reset links can fail or land without a usable recovery session.
-
-### Security baseline (frontend + Supabase)
-
-- Frontend must only use `VITE_SUPABASE_ANON_KEY` (never service role key).
-- Keep `.env` out of Git (`.gitignore` is configured for this).
-- Use RLS on all user-owned tables, scoped to `auth.uid()`.
-- Enable email confirmation and review password policy in Supabase Auth settings.
-
-### Example RLS policies for `profiles`
-
-Run in Supabase SQL editor (adjust if you already have policies):
-
-```sql
-alter table public.profiles enable row level security;
-
-create policy "profiles_select_own"
-on public.profiles
-for select
-using (auth.uid() = id);
-
-create policy "profiles_insert_own"
-on public.profiles
-for insert
-with check (auth.uid() = id);
-
-create policy "profiles_update_own"
-on public.profiles
-for update
-using (auth.uid() = id)
-with check (auth.uid() = id);
-```
-
-### IDOR/RLS verification checklist
-
-- Sign in as User A and verify User A can read/update only User A profile.
-- Sign in as User B and verify User B cannot read/update User A profile.
-- Confirm all new tables added later receive equivalent `auth.uid()`-scoped policies.
-
-### Vercel deployment security checklist
-
-- Set env vars in Vercel for each environment (Production/Preview/Development):
-  - `VITE_SUPABASE_URL`
-  - `VITE_SUPABASE_ANON_KEY`
-  - `VITE_APP_ORIGIN`
-- Ensure production domain is HTTPS and matches Supabase redirect configuration.
-- Avoid logging secrets/tokens in client code or browser console.
-- Use Supabase built-in controls for abuse protection (Auth rate limits / captcha where appropriate).
-
-## Troubleshooting
-
-- **Error: "Supabase environment variables are missing."**
-  - Confirm `.env` exists in project root.
-  - Confirm both `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` are set.
-  - Restart the dev server after updating env vars.
-
-- **Build fails on TypeScript**
-  - Run `npm run build` locally and resolve type errors before deploying.
-
-- **Auth or profile flow issues**
-  - Verify your Supabase project has Auth enabled.
-  - Verify the `profiles` table exists and your policies allow expected reads/writes.
-
-## Project structure (high-level)
-
-- `src/pages` - Route pages (`Landing`, `Dashboard`, `FocusSession`, etc.)
-- `src/components` - Reusable UI and session components
-- `src/lib` - Domain types, helpers, and Supabase utilities
-- `src/routes` - Route guards and onboarding gate
 
