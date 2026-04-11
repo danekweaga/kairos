@@ -11,9 +11,15 @@ jobs:
     steps:
       - name: Ping deployed keepalive endpoint
         env:
-          KEEPALIVE_URL: https://YOUR-APP-NAME.example.com/api/keepalive
+          APP_BASE_URL: ${{ vars.APP_BASE_URL }}
         run: |
           set -euo pipefail
+          if [ -z "${APP_BASE_URL}" ]; then
+            echo "::error::Missing GitHub repository variable APP_BASE_URL (e.g. https://your-app.vercel.app)"
+            exit 1
+          fi
+
+          KEEPALIVE_URL="${APP_BASE_URL%/}/api/keepalive"
           echo "Pinging: ${KEEPALIVE_URL}"
 
           # Print response headers and body; fail the job on HTTP errors.
