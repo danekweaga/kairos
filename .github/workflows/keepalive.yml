@@ -1,0 +1,28 @@
+name: Keep Alive
+
+on:
+  schedule:
+    - cron: "0 9 * * 1" # Every Monday at 09:00 UTC
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping deployed keepalive endpoint
+        env:
+          KEEPALIVE_URL: https://YOUR-APP-NAME.example.com/api/keepalive
+        run: |
+          set -euo pipefail
+          echo "Pinging: ${KEEPALIVE_URL}"
+
+          # Print response headers and body; fail the job on HTTP errors.
+          curl --fail --show-error --silent \
+            --dump-header /tmp/keepalive-headers.txt \
+            --output /tmp/keepalive-body.txt \
+            "${KEEPALIVE_URL}"
+
+          echo "=== Response Headers ==="
+          cat /tmp/keepalive-headers.txt
+          echo "=== Response Body ==="
+          cat /tmp/keepalive-body.txt
