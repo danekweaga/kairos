@@ -1,4 +1,3 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node"
 import { createClient } from "@supabase/supabase-js"
 
 type KeepAliveResponse = {
@@ -10,6 +9,16 @@ type KeepAliveResponse = {
     database: "ok" | "skipped" | "error"
   }
   details?: string
+}
+
+type KeepAliveRequest = {
+  method?: string
+}
+
+type KeepAliveResponseWriter = {
+  status: (code: number) => {
+    json: (body: KeepAliveResponse) => void
+  }
 }
 
 function createAdminClient() {
@@ -28,7 +37,7 @@ function createAdminClient() {
   })
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse<KeepAliveResponse>) {
+export default async function handler(req: KeepAliveRequest, res: KeepAliveResponseWriter) {
   if (req.method !== "GET") {
     return res.status(405).json({
       status: "degraded",
